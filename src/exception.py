@@ -1,5 +1,5 @@
 import sys
-from logger import logging
+from src.logger import logging
 
 
 def get_error_message_details(error, error_detail: sys):
