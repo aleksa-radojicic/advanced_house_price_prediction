@@ -1,4 +1,10 @@
+ipykernel
 pandas
 numpy
 seaborn
+pyarrow
+scikit-learn
+scipy
+scikit-optimize
+xgboost
 -e .
