@@ -6,8 +6,9 @@ from importlib import reload
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
+from src.config import INDEX, LABEL
 from src.exception import CustomException
-from src.logger import logging
+from src.logger import LOG_ENDING, logging
 
 # import src.exception
 
@@ -28,36 +29,36 @@ class DataIngestion:
 
     def start(self):
         logging.info(msg="Data ingestion method or component started")
-
+ 
         try:
-            df = pd.read_csv("data/train.csv")
+            df = pd.read_csv("data/train.csv", dtype_backend="pyarrow", index_col=INDEX)
+
+            # Downcast label column
+            df[LABEL] = pd.to_numeric(df[LABEL], downcast="signed")
             self.save_main_df_artifact(df)
+            
+            df_train, df_test = self.save_train_test_dfs_artifacts(df)
 
-            self.save_train_test_dfs_artifacts(df)
-
-            df_test_submission = pd.read_csv("data/test.csv")
+            df_test_submission = pd.read_csv(
+                "data/test.csv", dtype_backend="pyarrow", index_col=INDEX
+            )
             self.save_test_submission_artifact(df_test_submission)
 
-            logging.info(msg="Data ingestion method or component finished" + 5 * "*")
+            logging.info(msg="Data ingestion method or component finished" + LOG_ENDING)
 
-            return (
-                self.ingestion_config.raw_data_path,
-                self.ingestion_config.train_data_path,
-                self.ingestion_config.test_data_path,
-                self.ingestion_config.test_submission_data_path,
-            )
+            return (df, df_train, df_test, df_test_submission)
         except Exception as e:
-            raise CustomException(e, sys)
+            raise CustomException(e, sys) # type: ignore
 
     def save_test_submission_artifact(self, df):
-        logging.info("Read dataset for submission as dataframe finished " + 5 * "*")
+        logging.info("Read dataset for submission as dataframe finished " + LOG_ENDING)
 
         os.makedirs(
             os.path.dirname(self.ingestion_config.train_data_path), exist_ok=True
         )
 
         df.to_csv(self.ingestion_config.train_data_path, index=False, header=True)
-        logging.info("Saved main dataset artifact" + 5 * "*")
+        logging.info("Saved main dataset artifact" + LOG_ENDING)
 
     def save_train_test_dfs_artifacts(self, df):
         logging.info(msg="Train test split started")
@@ -65,13 +66,15 @@ class DataIngestion:
 
         df_train.to_csv(self.ingestion_config.test_data_path, index=False, header=True)
         df_test.to_csv(self.ingestion_config.test_data_path, index=False, header=True)
-        logging.info(msg="Train test split finished" + 5 * "*")
+        logging.info(msg="Train test split finished" + LOG_ENDING)
+
+        return (df_train, df_test)
 
     def save_main_df_artifact(self, df):
         os.makedirs(os.path.dirname(self.ingestion_config.raw_data_path), exist_ok=True)
 
         df.to_csv(self.ingestion_config.raw_data_path, index=False, header=True)
-        logging.info("Saved main dataset artifact" + 5 * "*")
+        logging.info("Saved main dataset artifact" + LOG_ENDING)
 
 
 if __name__ == "__main__":
