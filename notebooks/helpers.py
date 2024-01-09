@@ -10,10 +10,11 @@ from scipy import stats
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import power_transform
 
-import src.config
-from src.config import *
-
-reload(src.config)
+from notebooks.config import (BINARY_INIT, BINARY_INIT_RENAME_MAP,
+                              NOMINAL_INIT, NOMINAL_INIT_RENAME_MAP,
+                              NUMERICAL_INIT, NUMERICAL_INIT_RENAME_MAP,
+                              ORDINAL_INIT, ORDINAL_INIT_RENAME_MAP,
+                              FeaturesInfo)
 
 
 def downcast_numerical_dtypes(df: pd.DataFrame, numerical: List[str]):
@@ -61,7 +62,7 @@ def set_values_Foundation(df, x):
 
 def threshold_for_category(df, column, thr):
     a = pd.DataFrame(df[column].value_counts(normalize=True) * 100)
-    return a.loc[a.proportion > thr,].index.tolist()
+    return a.loc[a.proportion > thr,].index.tolist()  # type: ignore
 
 
 def set_values_Neighborhood(df, x):
@@ -87,7 +88,7 @@ def set_values_Exterior2nd(df, x):
 
 def drop_columns_scheduled_for_deletion(df: pd.DataFrame, features_info: FeaturesInfo):
     """Drops columns scheduled for deletion from the data frame and updates
-    other column's list."""
+    other columns list."""
     # Iterate through the columns to delete
     # Note: features_info['features_to_delete'] is copied because
     # values for key 'features_to_delete' are altered in the loop and
@@ -106,31 +107,6 @@ def drop_columns_scheduled_for_deletion(df: pd.DataFrame, features_info: Feature
     df = df.drop(columns=features_info["features_to_delete"], axis=1, errors="ignore")
 
     return df, features_info
-
-
-def find_best_numerical_dtypes():
-    """Determines the best numerical data types for columns in a DataFrame using
-    pyarrow backend.
-
-    Reads training and test DataFrames from CSV files, combines them and analyzes
-    the data types of numerical columns to find the most memory-efficient data types.
-
-    Returns
-    -------
-    Dict[str, DataType]:
-        A dictionary mapping column names to their best numerical data types dtype
-        object from pandas.
-    """
-
-    df_train = pd.read_csv(DF_TRAIN_FILE_PATH, dtype_backend="pyarrow", index_col=INDEX)
-    df_test = pd.read_csv(DF_TEST_FILE_PATH, dtype_backend="pyarrow", index_col=INDEX)
-
-    df = pd.concat([df_train, df_test])
-    del df_train, df_test
-
-    data_types = downcast_numerical_dtypes(df, NUMERICAL_INIT).dtypes
-
-    return data_types.to_dict()
 
 
 def downcast_nonnumerical_dtypes(df, binary, ordinal, nominal):
@@ -309,7 +285,7 @@ def get_correlations_and_pvals(df: pd.DataFrame, columns: List[str]) -> pd.DataF
         df[columns]
         .corr()
         .unstack()
-        .sort_values(key=lambda x: np.abs(x), ascending=False)
+        .sort_values(key=lambda x: np.abs(x), ascending=False)  # type: ignore
     )
     corr_with_derived = pd.DataFrame(
         {
@@ -331,10 +307,10 @@ def get_correlations_and_pvals(df: pd.DataFrame, columns: List[str]) -> pd.DataF
             col_pairs.append(set_pair)
             idx.append(i)
             pvalues.append(
-                stats.pearsonr(x=df[tuple_pair[0]], y=df[tuple_pair[1]]).pvalue
+                stats.pearsonr(x=df[tuple_pair[0]], y=df[tuple_pair[1]]).pvalue  # type: ignore
             )
 
-    corr_with_derived = corr_with_derived.iloc[idx,]
+    corr_with_derived = corr_with_derived.iloc[idx,]  # type: ignore
     corr_with_derived["pvalues"] = pvalues
 
     return corr_with_derived
@@ -462,27 +438,13 @@ def scatter_plots(df, x):
 def delete_column_and_update_columns_list(
     df, column_names, columns_list, update_columns_list=True
 ):
-    df.drop(column_names, axis=1)
+    df.drop(column_names, axis=1, inplace=True)
 
     if update_columns_list:
         if type(column_names) == list:
             [columns_list.remove(c) for c in column_names]
         else:
             columns_list.remove(column_names)
-
-
-def process_ordinal_column_cardinality(
-    df: pd.DataFrame, col_name: str, columns_list: List[str]
-):
-    if df[col_name].nunique() == 1:
-        delete_column_and_update_columns_list(df, col_name, columns_list)
-
-    # n_categories = df[col_name].nunique()
-    # val_counts = df[col_name].value_counts()
-
-    # if val_counts.iloc[n_categories-1] < MIN_CATEGORY_CARDINALITY:
-
-    #     if val_counts.iloc[n_categories-2] <
 
 
 class NumericColumnsTransformer(BaseEstimator, TransformerMixin):
@@ -581,7 +543,3 @@ class NumericColumnsTransformer(BaseEstimator, TransformerMixin):
 
     def _apply_square(self, column):
         return np.sqrt(column - np.min(column)) if any(column < 0) else np.sqrt(column)
-
-
-# NUMERICAL_COLS_CAST_DICT = find_best_numerical_dtypes()
-NUMERICAL_COLS_CAST_DICT = find_best_numerical_dtypes()
