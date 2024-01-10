@@ -7,4 +7,5 @@ scikit-learn
 scipy
 scikit-optimize
 xgboost
+papermill
 -e .
