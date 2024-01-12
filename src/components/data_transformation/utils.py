@@ -1,5 +1,5 @@
 import copy
-from typing import List, Tuple
+from typing import List
 
 import numpy as np
 import pandas as pd
@@ -8,7 +8,7 @@ from sklearn.preprocessing import power_transform
 
 from src.config import *
 from src.logger import logging
-from src.utils import FeaturesInfo
+from src.utils import log_feature_info_dict
 
 
 def create_category(df_column: pd.Series, all_categories: List[str]) -> pd.Series:
@@ -138,3 +138,53 @@ class NumericColumnsTransformer(BaseEstimator, TransformerMixin):
 
     def _apply_square(self, column):
         return np.sqrt(column - np.min(column)) if any(column < 0) else np.sqrt(column)
+
+
+class DropColumnsScheduledForDeletionTransformer(BaseEstimator, TransformerMixin):
+    """Drops columns scheduled for deletion from the data frame and updates
+    other columns list."""
+
+    def __init__(self, previous_transformer_obj, verbose: int = 1) -> None:
+        super().__init__()
+        self.previous_transformer_obj = previous_transformer_obj
+        self.verbose = verbose
+
+    def fit(self, X: pd.DataFrame, y=None):
+        return self
+
+    def transform(self, df: pd.DataFrame, y=None) -> pd.DataFrame:
+        logging.info("Dropping columns scheduled for deletion...")
+
+        # Iterate through the columns to delete
+        # Note: features_info['features_to_delete'] is copied because
+        # values for key 'features_to_delete' are altered in the loop and
+        # otherwise it would mess the loop
+        features_info = self.previous_transformer_obj.features_info
+
+        df = df.copy()
+        features_info = copy.deepcopy(features_info)
+
+        for column in features_info["features_to_delete"]:
+            for k in features_info:
+                if k == "features_to_delete":
+                    continue
+                if column in features_info[k]:
+                    features_info[k].remove(column)
+
+        # Drop the columns from the DataFrame
+        df = df.drop(
+            columns=features_info["features_to_delete"], axis=1, errors="ignore"
+        )
+        self.features_info = features_info
+
+        if self.verbose > 0:
+            log_feature_info_dict(
+                features_info, title="dropping columns scheduled for deletion"
+            )
+
+        logging.info("Dropped columns scheduled for deletion successfully.")
+
+        return df
+
+    def set_output(*args, **kwargs):
+        pass

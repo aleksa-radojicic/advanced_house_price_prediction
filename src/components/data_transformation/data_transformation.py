@@ -15,6 +15,8 @@ from src.components.data_transformation.post_feature_engineering_analysis import
     PostFEAnalysisTransformer
 from src.components.data_transformation.univariate_analysis import \
     UnivariateAnalysisTransformer
+from src.components.data_transformation.utils import \
+    DropColumnsScheduledForDeletionTransformer
 from src.config import LABEL
 from src.exception import CustomException
 from src.logger import LOG_ENDING, logging
@@ -38,6 +40,7 @@ class DataTransformation:
         ma_transformer = MultivariateAnalysisTransformer(ua_transformer)
         fe_transformer = FeatureEngineeringTransformer(ma_transformer)
         pfea_transformer = PostFEAnalysisTransformer(fe_transformer)
+        drop_columns_scheduled_for_deletion_transformer = DropColumnsScheduledForDeletionTransformer(pfea_transformer)
 
         transformer_pipeline = Pipeline(
             steps=[
@@ -45,6 +48,7 @@ class DataTransformation:
                 ("multivariate_analysis", ma_transformer),
                 ("feature_engineering", fe_transformer),
                 ("post_feature_engineering_analysis", pfea_transformer),
+                ("drop_columns_scheduled_for_deletion", drop_columns_scheduled_for_deletion_transformer),
             ]
         ).set_output(transform="pandas")
         return transformer_pipeline
