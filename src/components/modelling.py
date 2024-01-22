@@ -1,8 +1,12 @@
 import os
 from dataclasses import dataclass, field
 from importlib import reload
+from typing import Dict
 
 import numpy as np
+import pandas as pd
+from sklearn.base import RegressorMixin
+from sklearn.pipeline import Pipeline
 import xgboost as xgb
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.ensemble import AdaBoostRegressor, RandomForestRegressor
@@ -14,9 +18,9 @@ from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
 
 from src.components.data_ingestion import DataIngestion
-from src.components.data_transformation.data_transformation import \
-    DataTransformation
+from src.components.data_transformation.data_transformation import DataTransformation
 from src.config import *
+
 # reload(src.config);
 from src.logger import LOG_ENDING, logging
 
@@ -59,20 +63,48 @@ class Modelling:
 
     def start(self, df_train, df_test):
         logging.info(msg="Modelling method or component started")
-        
+
         X_train, X_test = self.get_X_train_test_sets(df_train, df_test)
         y_train, y_test = self.get_y_train_test_sets(df_train, df_test)
-        y_train_transformed, y_test_transformed = self.transform_y_train_test_sets(y_train, y_test)
+        y_train_transformed, y_test_transformed = self.transform_y_train_test_sets(
+            y_train, y_test
+        )
 
         ct_obj = self.create_column_transformer()
         logging.info("Column transformer created.")
+
+        eval_metrics: Dict[str, float] = {}
+        models: Dict[str, RegressorMixin] = self.modelling_config.models
+
+        for model_name, classif_obj in models.items():
+            pipeline = self.create_pipeline(ct_obj, classif_obj)
+
+            logging.info(f"Training {model_name} started.")
+            self.train_model(pipeline, X_train, y_train_transformed)
+            logging.info(f"Training {model_name} finished" + LOG_ENDING)
+
+            logging.info(f"Evaluation of {model_name} started.")
+            main_eval_metric = self.evaluate_model(pipeline, X_test, y_test_transformed)
+            eval_metrics[model_name] = main_eval_metric
+            logging.info(
+                f"Evaluation of {model_name} finished.\nMain evaluation metric: {main_eval_metric}"
+                + LOG_ENDING
+            )
+        logging.info("All models are trained and evaluated.")
+
+        best_model_name, best_model, best_eval_metric = self.get_best_basic_model(
+            models, eval_metrics
+        )
+        logging.info(f"Best basic model: {best_model_name}")
+
+        logging.info("Modelling method or component finished" + LOG_ENDING)
 
     def get_X_train_test_sets(self, ds_train, ds_test):
         X_train = ds_train.drop(LABEL, axis=1)
         X_test = ds_test.drop(LABEL, axis=1)
 
         return X_train, X_test
-    
+
     def get_y_train_test_sets(self, ds_train, ds_test):
         y_train = ds_train[LABEL]
         y_test = ds_test[LABEL]
@@ -102,6 +134,35 @@ class Modelling:
         ).set_output(transform="pandas")
         return ct
 
+    def train_model(self, pipeline: Pipeline, X, y):
+        pipeline.fit(X, y)
+
+    def evaluate_model(self, pipeline: Pipeline, X, y) -> float:
+        y_pred = pipeline.predict(X).reshape(-1, 1)  # type: ignore
+        # y_pred_linreg_exp = np.expm1(y_pred_linreg)
+
+        main_metric = self.modelling_config.calculate_evaluation_metric(y, y_pred)
+        return float(main_metric)
+
+    def create_pipeline(self, column_transformer_obj, classifier_obj):
+        pipeline = Pipeline(
+            [("ct", column_transformer_obj), ("classifier", classifier_obj)]
+        )
+        return pipeline
+
+    def get_best_basic_model(
+        self, models: Dict[str, RegressorMixin], evaluation_metrics: Dict[str, float]
+    ):
+        best_model_str, best_model_evaluation_metric = sorted(
+            evaluation_metrics.items(), key=lambda x: x[1]
+        )[0]
+        best_model = models[best_model_str]
+        return best_model_str, best_model, best_model_evaluation_metric
+
+
+def delete_rows(df: pd.DataFrame):
+    df.drop([598], inplace=True)
+
 
 if __name__ == "__main__":
     data_ingestion = DataIngestion()
@@ -111,6 +172,9 @@ if __name__ == "__main__":
     df_train_preprocessed, df_test_preprocessed = data_transformation.start(
         df_train, df_test
     )
+
+    # The deletion of rows should be handled differently
+    delete_rows(df_train_preprocessed)
 
     modelling = Modelling()
     modelling.start(df_train_preprocessed, df_test_preprocessed)
