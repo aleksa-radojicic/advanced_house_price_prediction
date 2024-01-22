@@ -4,10 +4,12 @@ from importlib import reload
 
 import numpy as np
 import xgboost as xgb
+from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.ensemble import AdaBoostRegressor, RandomForestRegressor
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_squared_error
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.preprocessing import OrdinalEncoder
 from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
 
@@ -15,8 +17,8 @@ from src.components.data_ingestion import DataIngestion
 from src.components.data_transformation.data_transformation import \
     DataTransformation
 from src.config import *
-
 # reload(src.config);
+from src.logger import LOG_ENDING, logging
 
 
 @dataclass
@@ -56,7 +58,49 @@ class Modelling:
         self.modelling_config = ModellingConfig()
 
     def start(self, df_train, df_test):
-        pass
+        logging.info(msg="Modelling method or component started")
+        
+        X_train, X_test = self.get_X_train_test_sets(df_train, df_test)
+        y_train, y_test = self.get_y_train_test_sets(df_train, df_test)
+        y_train_transformed, y_test_transformed = self.transform_y_train_test_sets(y_train, y_test)
+
+        ct_obj = self.create_column_transformer()
+        logging.info("Column transformer created.")
+
+    def get_X_train_test_sets(self, ds_train, ds_test):
+        X_train = ds_train.drop(LABEL, axis=1)
+        X_test = ds_test.drop(LABEL, axis=1)
+
+        return X_train, X_test
+    
+    def get_y_train_test_sets(self, ds_train, ds_test):
+        y_train = ds_train[LABEL]
+        y_test = ds_test[LABEL]
+
+        return y_train, y_test
+
+    def transform_y_train_test_sets(self, y_train, y_test):
+        y_train_transformed = np.log1p(y_train)
+        y_test_transformed = np.log1p(y_test)
+
+        return y_train_transformed, y_test_transformed
+
+    def create_column_transformer(self):
+        ct = ColumnTransformer(
+            [
+                # ("numerical", MinMaxScaler(), make_column_selector("numerical__")),
+                ("numerical", "passthrough", make_column_selector("numerical__")),
+                # ("binary", OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1), features_info['binary']),
+                ("binary", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), make_column_selector(pattern="binary__")),
+                # ("ordinal", OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1), features_info["ordinal"]),
+                ("ordinal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), make_column_selector(pattern="ordinal__")),
+                ("nominal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1, dtype=np.int16), make_column_selector(pattern="nominal__"))
+                # ("nominal", OneHotEncoder(handle_unknown='ignore', dtype=np.int8, sparse_output=False), features_info["nominal"])
+            ],
+            remainder="drop",
+            verbose_feature_names_out=False,  # False because prefixes are added manually
+        ).set_output(transform="pandas")
+        return ct
 
 
 if __name__ == "__main__":
