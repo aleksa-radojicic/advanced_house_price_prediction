@@ -188,3 +188,49 @@ class DropColumnsScheduledForDeletionTransformer(BaseEstimator, TransformerMixin
 
     def set_output(*args, **kwargs):
         pass
+
+
+class ColumnDtPrefixerTransformer(BaseEstimator, TransformerMixin):
+    """Adds prefix to column names denoting its data type."""
+
+    def __init__(self, previous_transformer_obj) -> None:
+        super().__init__()
+        self.previous_transformer_obj = previous_transformer_obj
+
+    def fit(self, X: pd.DataFrame, y=None):
+        return self
+
+    def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
+        X = X.copy()
+        features_info = self.previous_transformer_obj.features_info
+
+        X.rename(
+            columns={c: f"numerical__{c}" for c in features_info["numerical"]},
+            inplace=True,
+        )
+        X.rename(
+            columns={c: f"binary__{c}" for c in features_info["binary"]}, inplace=True
+        )
+        X.rename(
+            columns={c: f"ordinal__{c}" for c in features_info["ordinal"]}, inplace=True
+        )
+        X.rename(
+            columns={c: f"nominal__{c}" for c in features_info["nominal"]}, inplace=True
+        )
+
+        self.features_info = features_info
+
+        features_info_str = ""
+        for k, v in features_info.items():
+            features_info_str += f"{k}: {v}\n"
+        logging.info(
+            "FeaturesInfo after adding data type prefix to columns:\n"
+            + features_info_str
+        )
+
+        logging.info("Added data type prefix to columns successfully.")
+
+        return X
+
+    def set_output(*args, **kwargs):
+        pass
