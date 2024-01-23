@@ -1,6 +1,12 @@
+import os
+import pickle
+import sys
 from typing import Dict, List
 
 import pandas as pd
+
+from src.config import LABEL
+from src.exception import CustomException
 from src.logger import logging
 
 FeaturesInfo = Dict[str, List[str]]
@@ -77,3 +83,29 @@ def log_feature_info_dict(features_info: FeaturesInfo, title: str):
     for k, v in features_info.items():
         features_info_str += f"{k}: {v}\n"
     logging.info(f"FeaturesInfo after {title}:\n" + features_info_str)
+
+
+def pickle_object(file_path, obj):
+    try:
+        dir_path = os.path.dirname(file_path)
+        os.makedirs(dir_path, exist_ok=True)
+
+        with open(file_path, "wb") as file_obj:
+            pickle.dump(obj, file_obj)
+
+    except Exception as e:
+        raise CustomException(e, sys)
+
+
+def json_object(file_path, obj):
+    import json
+
+    try:
+        dir_path = os.path.dirname(file_path)
+        os.makedirs(dir_path, exist_ok=True)
+
+        with open(file_path, "w") as file_obj:
+            json.dump(obj, file_obj, indent=1)
+
+    except Exception as e:
+        raise CustomException(e, sys)

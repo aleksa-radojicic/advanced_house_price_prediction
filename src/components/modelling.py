@@ -5,14 +5,14 @@ from typing import Dict
 
 import numpy as np
 import pandas as pd
-from sklearn.base import RegressorMixin
-from sklearn.pipeline import Pipeline
 import xgboost as xgb
+from sklearn.base import RegressorMixin
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.ensemble import AdaBoostRegressor, RandomForestRegressor
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_squared_error
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OrdinalEncoder
 from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
@@ -23,6 +23,7 @@ from src.config import *
 
 # reload(src.config);
 from src.logger import LOG_ENDING, logging
+from src.utils import json_object, pickle_object
 
 
 @dataclass
@@ -96,6 +97,18 @@ class Modelling:
             models, eval_metrics
         )
         logging.info(f"Best basic model: {best_model_name}")
+        logging.info(f"Best basic model evaluation metric: {best_eval_metric}")
+
+        model_details = self.create_model_details(
+            best_model_name, RANDOM_SEED, best_eval_metric
+        )
+
+        self.save_model(self.modelling_config.best_trained_model_path, best_model)
+        logging.info(f"Saved best model {best_model_name}.")
+        self.save_model_details(
+            self.modelling_config.best_trained_model_details_path, model_details
+        )
+        logging.info(f"Saved best model details.")
 
         logging.info("Modelling method or component finished" + LOG_ENDING)
 
@@ -158,6 +171,22 @@ class Modelling:
         )[0]
         best_model = models[best_model_str]
         return best_model_str, best_model, best_model_evaluation_metric
+
+    def save_model(self, file_path, model):
+        pickle_object(file_path, model)
+
+    def save_model_details(self, file_path, model_details):
+        json_object(file_path, model_details)
+
+    def create_model_details(
+        self, best_model_name: str, RANDOM_SEED: int, best_eval_metric: float
+    ) -> dict:
+        model_details = {
+            "Model basic": best_model_name,
+            "random_state": RANDOM_SEED,
+            "Evaluation metric (root mean squared error)": best_eval_metric,
+        }
+        return model_details
 
 
 def delete_rows(df: pd.DataFrame):
