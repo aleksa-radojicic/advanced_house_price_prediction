@@ -19,7 +19,7 @@ from src.components.data_transformation.post_feature_engineering_analysis import
 from src.components.data_transformation.univariate_analysis import \
     UnivariateAnalysisTransformer
 from src.components.data_transformation.utils import \
-    ColumnDtPrefixerTransformer, DropColumnsScheduledForDeletionTransformer
+    ColumnDtPrefixerTransformer, DropColumnsScheduledForDeletionTransformer, LabelTransformer
 from src.config import LABEL
 from src.exception import CustomException
 from src.logger import LOG_ENDING, logging
@@ -102,7 +102,7 @@ def create_column_transformer():
             # ("ordinal", OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1), features_info["ordinal"]),
             ("ordinal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), make_column_selector(pattern="ordinal__")),
             ("nominal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1, dtype=np.int16), make_column_selector(pattern="nominal__")),
-            ("label", "passthrough", [LABEL])
+            ("label", LabelTransformer(), [LABEL])
             # ("nominal", OneHotEncoder(handle_unknown='ignore', dtype=np.int8, sparse_output=False), features_info["nominal"])
         ],
         remainder="drop",

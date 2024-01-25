@@ -4,6 +4,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.pipeline import FunctionTransformer
 from sklearn.preprocessing import power_transform
 
 from src.config import *
@@ -234,3 +235,29 @@ class ColumnDtPrefixerTransformer(BaseEstimator, TransformerMixin):
 
     def set_output(*args, **kwargs):
         pass
+
+
+class LabelTransformer(FunctionTransformer):
+    def __init__(self, **kwargs):
+        super().__init__(
+            func=self.transform_func,
+            inverse_func=self.inverse_transform_func,
+            check_inverse=False,
+            **kwargs,
+        )
+
+    def transform(self, X):
+        result = super().transform(X)
+        logging.info("Label transformed.")
+        return result
+
+    def inverse_transform(self, X):
+        result = super().inverse_transform(X)
+        logging.info("Label transformed back to the original.")
+        return result
+
+    def transform_func(self, X, y=None):
+        return np.log1p(X)
+
+    def inverse_transform_func(self, X, y=None):
+        return np.expm1(X)

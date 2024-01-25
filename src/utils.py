@@ -2,7 +2,6 @@ import os
 import pickle
 import sys
 from typing import Dict, List
-import numpy as np
 
 import pandas as pd
 
@@ -94,11 +93,6 @@ def get_X_sets(dfs):
 def get_y_sets(dfs):
     ys = [df[LABEL] for df in dfs]
     return ys
-
-
-def transform_y_sets(ys):
-    ys_transformed = [np.log1p(y) for y in ys]
-    return ys_transformed
 
 
 def pickle_object(file_path, obj):

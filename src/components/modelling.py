@@ -23,8 +23,7 @@ from src.components.data_transformation.data_transformation import \
 from src.config import *
 # reload(src.config);
 from src.logger import LOG_ENDING, logging
-from src.utils import (get_X_sets, get_y_sets, json_object, pickle_object,
-                       transform_y_sets)
+from src.utils import get_X_sets, get_y_sets, json_object, pickle_object
 
 
 @dataclass
@@ -70,7 +69,6 @@ class Modelling:
 
         X_train, X_test = get_X_sets([df_train, df_test])
         y_train, y_test = get_y_sets([df_train, df_test])
-        y_train_transformed, y_test_transformed = transform_y_sets([y_train, y_test])
 
         eval_metrics: Dict[str, float] = {}
         models: Dict[str, RegressorMixin] = self.modelling_config.models
@@ -79,11 +77,11 @@ class Modelling:
             pipeline = self.append_predictor_to_pipeline(Pipeline([]), predictor_obj)
 
             logging.info(f"Training {model_name} started.")
-            self.train_model(pipeline, X_train, y_train_transformed)
+            self.train_model(pipeline, X_train, y_train)
             logging.info(f"Training {model_name} finished" + LOG_ENDING)
 
             logging.info(f"Evaluation of {model_name} started.")
-            main_eval_metric = self.evaluate_model(pipeline, X_test, y_test_transformed)
+            main_eval_metric = self.evaluate_model(pipeline, X_test, y_test)
             eval_metrics[model_name] = main_eval_metric
             logging.info(
                 f"Evaluation of {model_name} finished.\nMain evaluation metric: {main_eval_metric}"
@@ -120,7 +118,6 @@ class Modelling:
 
     def evaluate_model(self, pipeline: Pipeline, X, y) -> float:
         y_pred = pipeline.predict(X).reshape(-1, 1)  # type: ignore
-        # y_pred_linreg_exp = np.expm1(y_pred_linreg)
 
         main_metric = self.modelling_config.calculate_evaluation_metric(y, y_pred)
         return float(main_metric)
