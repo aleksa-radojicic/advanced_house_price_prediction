@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from sklearn.base import RegressorMixin
+from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import AdaBoostRegressor, RandomForestRegressor
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_squared_error
@@ -48,6 +49,8 @@ class ModellingConfig:
         self.rf_classifier.estimator_ = DecisionTreeRegressor(random_state=RANDOM_SEED)
 
         self.models = {
+            "dummy_mean": DummyRegressor(strategy="mean"),
+            "dummy_median": DummyRegressor(strategy="median"),
             "ridge": Ridge(random_state=RANDOM_SEED),
             "svr": SVR(),
             "knn": KNeighborsRegressor(n_jobs=-1),
@@ -87,6 +90,11 @@ class Modelling:
                 + LOG_ENDING
             )
         logging.info("All models are trained and evaluated.")
+
+        logging.info(f"Evaluation metrics for all models:")
+        # Sorting by lowest RMSE
+        for model_name, eval_metric in sorted(eval_metrics.items(), key=lambda x: x[1]):
+            logging.info(f"{model_name}: {eval_metric}")
 
         best_model_name, best_model, best_eval_metric = self.get_best_basic_model(
             models, eval_metrics
