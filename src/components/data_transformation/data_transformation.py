@@ -2,9 +2,12 @@ import os
 import sys
 from dataclasses import dataclass
 from typing import List, Tuple
+import numpy as np
 
 import pandas as pd
+from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OrdinalEncoder
 
 from src.components.data_ingestion import DataIngestion
 from src.components.data_transformation.feature_engineering import \
@@ -42,6 +45,7 @@ class DataTransformation:
         pfea_transformer = PostFEAnalysisTransformer(fe_transformer)
         drop_columns_scheduled_for_deletion_transformer = DropColumnsScheduledForDeletionTransformer(pfea_transformer)
         column_dt_prefixer = ColumnDtPrefixerTransformer(drop_columns_scheduled_for_deletion_transformer)
+        column_transformer = create_column_transformer()
 
         transformer_pipeline = Pipeline(
             steps=[
@@ -51,31 +55,27 @@ class DataTransformation:
                 ("post_feature_engineering_analysis", pfea_transformer),
                 ("drop_columns_scheduled_for_deletion", drop_columns_scheduled_for_deletion_transformer),
                 ("column_dt_prefixer", column_dt_prefixer),
+                ("column_transformer", column_transformer)
             ]
         ).set_output(transform="pandas")
         return transformer_pipeline
 
-    def start(self, df_train, df_test) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def start(self, df_train: pd.DataFrame, df_test: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         logging.info(msg="Data transformation method or component started")
 
         try:
             preprocessing_obj = self.create_data_transformer_object()
 
-            X_train = df_train.drop(LABEL, axis=1)
-            X_test = df_test.drop(LABEL, axis=1)
-
-            y_train = df_train[LABEL]
-            y_test = df_test[LABEL]
-
             logging.info(
                 f"Applying preprocessing object on training dataframe and testing dataframe."
             )
 
-            X_train_preprocessed = preprocessing_obj.fit_transform(X_train)  # type: ignore
-            X_test_preprocessed = preprocessing_obj.transform(X_test)  # type: ignore
+            df_train_preprocessed = preprocessing_obj.fit_transform(df_train)  # type: ignore
+            df_test_preprocessed = preprocessing_obj.transform(df_test)  # type: ignore
 
-            df_train_preprocessed = pd.concat([X_train_preprocessed, y_train], axis=1)
-            df_test_preprocessed = pd.concat([X_test_preprocessed, y_test], axis=1)
+            # The deletion of rows should be handled differently
+            delete_rows(df_train_preprocessed)
+            logging.info("Appropriate rows deleted.")
 
             # logging.info(f"Saved preprocessing objects.")
 
@@ -92,6 +92,26 @@ class DataTransformation:
 
         return df_train_preprocessed, df_test_preprocessed
 
+def create_column_transformer():
+    ct = ColumnTransformer(
+        [
+            # ("numerical", MinMaxScaler(), make_column_selector("numerical__")),
+            ("numerical", "passthrough", make_column_selector("numerical__")),
+            # ("binary", OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1), features_info['binary']),
+            ("binary", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), make_column_selector(pattern="binary__")),
+            # ("ordinal", OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1), features_info["ordinal"]),
+            ("ordinal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), make_column_selector(pattern="ordinal__")),
+            ("nominal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1, dtype=np.int16), make_column_selector(pattern="nominal__")),
+            ("label", "passthrough", [LABEL])
+            # ("nominal", OneHotEncoder(handle_unknown='ignore', dtype=np.int8, sparse_output=False), features_info["nominal"])
+        ],
+        remainder="drop",
+        verbose_feature_names_out=False,  # False because prefixes are added manually
+    ).set_output(transform="pandas")
+    return ct
+
+def delete_rows(df: pd.DataFrame):
+    df.drop([598], inplace=True)
 
 if __name__ == "__main__":
     data_ingestion = DataIngestion()

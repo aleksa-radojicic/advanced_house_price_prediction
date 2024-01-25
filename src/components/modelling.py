@@ -1,4 +1,5 @@
 import os
+from copy import deepcopy
 from dataclasses import dataclass, field
 from importlib import reload
 from typing import Dict
@@ -7,23 +8,22 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 from sklearn.base import RegressorMixin
-from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.ensemble import AdaBoostRegressor, RandomForestRegressor
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_squared_error
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OrdinalEncoder
 from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
 
 from src.components.data_ingestion import DataIngestion
-from src.components.data_transformation.data_transformation import DataTransformation
+from src.components.data_transformation.data_transformation import \
+    DataTransformation
 from src.config import *
-
 # reload(src.config);
 from src.logger import LOG_ENDING, logging
-from src.utils import json_object, pickle_object
+from src.utils import (get_X_sets, get_y_sets, json_object, pickle_object,
+                       transform_y_sets)
 
 
 @dataclass
@@ -65,20 +65,15 @@ class Modelling:
     def start(self, df_train, df_test):
         logging.info(msg="Modelling method or component started")
 
-        X_train, X_test = self.get_X_train_test_sets(df_train, df_test)
-        y_train, y_test = self.get_y_train_test_sets(df_train, df_test)
-        y_train_transformed, y_test_transformed = self.transform_y_train_test_sets(
-            y_train, y_test
-        )
-
-        ct_obj = self.create_column_transformer()
-        logging.info("Column transformer created.")
+        X_train, X_test = get_X_sets([df_train, df_test])
+        y_train, y_test = get_y_sets([df_train, df_test])
+        y_train_transformed, y_test_transformed = transform_y_sets([y_train, y_test])
 
         eval_metrics: Dict[str, float] = {}
         models: Dict[str, RegressorMixin] = self.modelling_config.models
 
-        for model_name, classif_obj in models.items():
-            pipeline = self.create_pipeline(ct_obj, classif_obj)
+        for model_name, predictor_obj in models.items():
+            pipeline = self.append_predictor_to_pipeline(Pipeline([]), predictor_obj)
 
             logging.info(f"Training {model_name} started.")
             self.train_model(pipeline, X_train, y_train_transformed)
@@ -112,41 +107,6 @@ class Modelling:
 
         logging.info("Modelling method or component finished" + LOG_ENDING)
 
-    def get_X_train_test_sets(self, ds_train, ds_test):
-        X_train = ds_train.drop(LABEL, axis=1)
-        X_test = ds_test.drop(LABEL, axis=1)
-
-        return X_train, X_test
-
-    def get_y_train_test_sets(self, ds_train, ds_test):
-        y_train = ds_train[LABEL]
-        y_test = ds_test[LABEL]
-
-        return y_train, y_test
-
-    def transform_y_train_test_sets(self, y_train, y_test):
-        y_train_transformed = np.log1p(y_train)
-        y_test_transformed = np.log1p(y_test)
-
-        return y_train_transformed, y_test_transformed
-
-    def create_column_transformer(self):
-        ct = ColumnTransformer(
-            [
-                # ("numerical", MinMaxScaler(), make_column_selector("numerical__")),
-                ("numerical", "passthrough", make_column_selector("numerical__")),
-                # ("binary", OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1), features_info['binary']),
-                ("binary", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), make_column_selector(pattern="binary__")),
-                # ("ordinal", OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1), features_info["ordinal"]),
-                ("ordinal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), make_column_selector(pattern="ordinal__")),
-                ("nominal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1, dtype=np.int16), make_column_selector(pattern="nominal__"))
-                # ("nominal", OneHotEncoder(handle_unknown='ignore', dtype=np.int8, sparse_output=False), features_info["nominal"])
-            ],
-            remainder="drop",
-            verbose_feature_names_out=False,  # False because prefixes are added manually
-        ).set_output(transform="pandas")
-        return ct
-
     def train_model(self, pipeline: Pipeline, X, y):
         pipeline.fit(X, y)
 
@@ -157,10 +117,9 @@ class Modelling:
         main_metric = self.modelling_config.calculate_evaluation_metric(y, y_pred)
         return float(main_metric)
 
-    def create_pipeline(self, column_transformer_obj, classifier_obj):
-        pipeline = Pipeline(
-            [("ct", column_transformer_obj), ("classifier", classifier_obj)]
-        )
+    def append_predictor_to_pipeline(self, pipeline, predictor_obj):
+        pipeline = deepcopy(pipeline)
+        pipeline.steps.append(("predictor", predictor_obj))
         return pipeline
 
     def get_best_basic_model(
@@ -189,10 +148,6 @@ class Modelling:
         return model_details
 
 
-def delete_rows(df: pd.DataFrame):
-    df.drop([598], inplace=True)
-
-
 if __name__ == "__main__":
     data_ingestion = DataIngestion()
     df, df_train, df_test, df_test_submission = data_ingestion.start()
@@ -201,9 +156,6 @@ if __name__ == "__main__":
     df_train_preprocessed, df_test_preprocessed = data_transformation.start(
         df_train, df_test
     )
-
-    # The deletion of rows should be handled differently
-    delete_rows(df_train_preprocessed)
 
     modelling = Modelling()
     modelling.start(df_train_preprocessed, df_test_preprocessed)
