@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 import numpy as np
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import make_scorer, mean_squared_error
 from sklearn.pipeline import Pipeline
 
 from src.components.data_ingestion import DataIngestion
@@ -11,13 +11,25 @@ from src.components.model_trainer import ModelTrainer
 from src.logger import LOG_ENDING, logging
 from src.utils import get_X_sets, get_y_sets
 
+def wrapper_compute_evaluation_metric(y_true, y_pred):
+    return ModelEvaluatorConfig.compute_evaluation_metric(y_true, y_pred)
 
-@dataclass
+
 class ModelEvaluatorConfig:
-    def compute_evaluation_metric(self, y_true, y_pred):
+    evaluation_metric_name = "root_mean_squared_error"
+    greater_is_better = False
+
+    @classmethod
+    def compute_evaluation_metric(cls, y_true, y_pred):
         root_mean_squared_error = float(np.sqrt(mean_squared_error(y_true, y_pred)))
         return root_mean_squared_error
+    
+    scorer = make_scorer(score_func=wrapper_compute_evaluation_metric, greater_is_better=greater_is_better)
 
+    @classmethod
+    def get_scorer(cls):
+        return cls.scorer
+    
 
 class ModelEvaluator:
     def __init__(self, model_name):
