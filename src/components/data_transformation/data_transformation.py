@@ -40,25 +40,15 @@ class DataTransformation:
         features_info: FeaturesInfo = {}
 
         ua_transformer = UnivariateAnalysisTransformer(features_info, self.verbose)
-        
         ma_transformer = MultivariateAnalysisTransformer(self.verbose)
-        ma_transformer.previous_transformer_obj = ua_transformer # type: ignore
-        
         fe_transformer = FeatureEngineeringTransformer(self.verbose)
-        fe_transformer.previous_transformer_obj = ma_transformer # type: ignore
 
         pfea_transformer = PostFEAnalysisTransformer(self.verbose)
-        pfea_transformer.previous_transformer_obj = fe_transformer # type: ignore
 
         drop_columns_scheduled_for_deletion_transformer = (
             DropColumnsScheduledForDeletionTransformer(self.verbose)
         )
-        drop_columns_scheduled_for_deletion_transformer.previous_transformer_obj = pfea_transformer # type: ignore
-
-        
-        column_dt_prefixer = ColumnDtPrefixerTransformer(self.verbose
-        )
-        column_dt_prefixer.previous_transformer_obj = drop_columns_scheduled_for_deletion_transformer # type: ignore
+        column_dt_prefixer = ColumnDtPrefixerTransformer(self.verbose)
 
         column_transformer = create_column_transformer()
 
@@ -73,6 +63,7 @@ class DataTransformation:
             ]
         ).set_output(transform="pandas")
         return data_transformation_pipeline
+
 
 def create_column_transformer():
     ct = ColumnTransformer(
@@ -91,13 +82,13 @@ def create_column_transformer():
     ).set_output(transform="pandas")
     return ct
 
+
 if __name__ == "__main__":
     data_ingestion = DataIngestion()
     df, df_train, df_test, df_test_submission = data_ingestion.start()
 
     data_transformation = DataTransformation()
     pipeline = Pipeline([("data_transformation", data_transformation.create_data_transformation_pipeline())])
-    
     label_transformer = LabelTransformer()
 
     X_train, X_test = get_X_sets([df_train, df_test])

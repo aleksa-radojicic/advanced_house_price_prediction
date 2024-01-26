@@ -4,7 +4,8 @@ from typing import Tuple
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from src.components.data_transformation.utils import create_category
+from src.components.data_transformation.utils import (PipelineFeaturesInfo,
+                                                      create_category)
 from src.logger import log_message
 from src.utils import (FeaturesInfo, delete_column_and_update_columns_list,
                        log_feature_info_dict)
@@ -188,58 +189,61 @@ class UnivariateAnalysisTransformer(BaseEstimator, TransformerMixin):
         X = X.copy()
 
         # Renaming initial column names to more intuitive column names
-        X, self.features_info = self.rename_init_col_names(X, self.features_info)
-        X = self.downcast_df(X)
+        X, features_info = self.rename_init_col_names(X, self.features_info)
+        X = self.downcast_df(X, features_info)
 
         # Convert from square feet to square meters variables denoting area
-        X, self.features_info["numerical"] = convert_sf_to_m2(
-            X, self.features_info["numerical"]
+        X, features_info["numerical"] = convert_sf_to_m2(
+            X, features_info["numerical"]
         )
 
         # Perhaps these methods can be reformated as Transformers?
-        X = self.ua_process_numerical(X)
-        X = self.ua_process_binary(X)
-        X = self.ua_process_ordinal(X)
+        X = self.ua_process_numerical(X, features_info)
+        X = self.ua_process_binary(X, features_info)
+        X = self.ua_process_ordinal(X, features_info)
         
-        log_feature_info_dict(self.features_info, "univariate analysis", self.verbose)
+        log_feature_info_dict(features_info, "univariate analysis", self.verbose)
 
         log_message("Performed manipulations from univariate analysis successfully.", self.verbose)
 
+        if not PipelineFeaturesInfo.ua_transformer_fi:
+            PipelineFeaturesInfo.ua_transformer_fi = features_info # type: ignore
+        
         return X
 
     def set_output(*args, **kwargs):
         pass
 
-    def downcast_df(self, X):
+    def downcast_df(self, X, features_info: FeaturesInfo):
         # Downcast non-numerical columns
         X = self.downcast_nonnumerical_dtypes(
             X,
-            self.features_info["binary"],
-            self.features_info["ordinal"],
-            self.features_info["nominal"],
+            features_info["binary"],
+            features_info["ordinal"],
+            features_info["nominal"],
         )
 
         # Downcast numerical columns
-        for c in self.features_info["numerical"]:
+        for c in features_info["numerical"]:
             X[c] = pd.to_numeric(X[c], downcast="signed")
 
         # Downcast column names
         X.columns = X.columns.astype("string[pyarrow]")
         return X
 
-    def ua_process_numerical(self, X: pd.DataFrame) -> pd.DataFrame:
+    def ua_process_numerical(self, X: pd.DataFrame, features_info: FeaturesInfo) -> pd.DataFrame:
         X = X.copy()
-        self.features_info["features_to_delete"].extend(
+        features_info["features_to_delete"].extend(
             ["LowQualFinM2", "3SsnPorchM2", "PoolM2", "PoolQ"]
         )
         return X
 
-    def ua_process_binary(self, X: pd.DataFrame) -> pd.DataFrame:
+    def ua_process_binary(self, X: pd.DataFrame, features_info: FeaturesInfo) -> pd.DataFrame:
         X = X.copy()
-        delete_column_and_update_columns_list(X, "Street", self.features_info["binary"])
+        delete_column_and_update_columns_list(X, "Street", features_info["binary"])
         return X
 
-    def ua_process_ordinal(self, X: pd.DataFrame) -> pd.DataFrame:
+    def ua_process_ordinal(self, X: pd.DataFrame, features_info: FeaturesInfo) -> pd.DataFrame:
         X = X.copy()
         cols_to_add_na_category = [
             "BsmtQ",
@@ -287,7 +291,7 @@ class UnivariateAnalysisTransformer(BaseEstimator, TransformerMixin):
             "PoolQ": ["NA", "Fa", "TA", "Gd", "Ex"],
         }
 
-        for col_name in self.features_info["ordinal"]:
+        for col_name in features_info["ordinal"]:
             X[col_name] = create_category(
                 X[col_name], category_orderings_dict[col_name]
             )

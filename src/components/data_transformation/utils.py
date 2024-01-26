@@ -1,4 +1,4 @@
-import copy
+from copy import deepcopy
 from typing import List
 
 import numpy as np
@@ -9,7 +9,7 @@ from sklearn.preprocessing import power_transform
 
 from src.config import *
 from src.logger import log_message, logging
-from src.utils import log_feature_info_dict
+from src.utils import FeaturesInfo, log_feature_info_dict
 
 
 def create_category(df_column: pd.Series, all_categories: List[str]) -> pd.Series:
@@ -145,8 +145,6 @@ class DropColumnsScheduledForDeletionTransformer(BaseEstimator, TransformerMixin
     """Drops columns scheduled for deletion from the data frame and updates
     other columns list."""
 
-    previous_transformer_obj = None
-
     def __init__(self, verbose: int = 0) -> None:
         super().__init__()
         self.verbose = verbose
@@ -161,10 +159,9 @@ class DropColumnsScheduledForDeletionTransformer(BaseEstimator, TransformerMixin
         # Note: features_info['features_to_delete'] is copied because
         # values for key 'features_to_delete' are altered in the loop and
         # otherwise it would mess the loop
-        features_info = self.previous_transformer_obj.features_info # type: ignore
+        features_info = deepcopy(PipelineFeaturesInfo.pfea_transformer_fi)
 
         df = df.copy()
-        features_info = copy.deepcopy(features_info)
 
         for column in features_info["features_to_delete"]:
             for k in features_info:
@@ -177,14 +174,18 @@ class DropColumnsScheduledForDeletionTransformer(BaseEstimator, TransformerMixin
         df = df.drop(
             columns=features_info["features_to_delete"], axis=1, errors="ignore"
         )
-        self.features_info = features_info
 
-        
         log_feature_info_dict(
-                features_info, "dropping columns scheduled for deletion", self.verbose
+            features_info, "dropping columns scheduled for deletion", self.verbose
         )
 
-        log_message("Dropped columns scheduled for deletion successfully.", self.verbose)
+        log_message(
+            "Dropped columns scheduled for deletion successfully.", self.verbose
+        )
+
+        if not PipelineFeaturesInfo.drop_columns_scheduled_for_deletion_transformer_fi:
+            PipelineFeaturesInfo.drop_columns_scheduled_for_deletion_transformer_fi = features_info  # type: ignore
+
         return df
 
     def set_output(*args, **kwargs):
@@ -193,8 +194,6 @@ class DropColumnsScheduledForDeletionTransformer(BaseEstimator, TransformerMixin
 
 class ColumnDtPrefixerTransformer(BaseEstimator, TransformerMixin):
     """Adds prefix to column names denoting its data type."""
-
-    previous_transformer_obj = None
 
     def __init__(self, verbose: int = 0) -> None:
         super().__init__()
@@ -205,7 +204,9 @@ class ColumnDtPrefixerTransformer(BaseEstimator, TransformerMixin):
 
     def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
         X = X.copy()
-        features_info = self.previous_transformer_obj.features_info # type: ignore
+        features_info = deepcopy(
+            PipelineFeaturesInfo.drop_columns_scheduled_for_deletion_transformer_fi
+        )
 
         X.rename(
             columns={c: f"numerical__{c}" for c in features_info["numerical"]},
@@ -221,11 +222,15 @@ class ColumnDtPrefixerTransformer(BaseEstimator, TransformerMixin):
             columns={c: f"nominal__{c}" for c in features_info["nominal"]}, inplace=True
         )
 
-        self.features_info = features_info
-
-        log_feature_info_dict(self.features_info, "adding data type prefix to columns", self.verbose)
+        log_feature_info_dict(
+            features_info, "adding data type prefix to columns", self.verbose
+        )
 
         log_message("Added data type prefix to columns successfully.", self.verbose)
+
+        if not PipelineFeaturesInfo.column_dt_prefixer_fi:
+            PipelineFeaturesInfo.column_dt_prefixer_fi = features_info  # type: ignore
+
         return X
 
     def set_output(*args, **kwargs):
@@ -257,3 +262,12 @@ class LabelTransformer(FunctionTransformer):
 
     def inverse_transform_func(self, X, y=None):
         return np.expm1(X)
+
+
+class PipelineFeaturesInfo:
+    ua_transformer_fi: FeaturesInfo = {}
+    ma_transformer_fi: FeaturesInfo = {}
+    fe_transformer_fi: FeaturesInfo = {}
+    pfea_transformer_fi: FeaturesInfo = {}
+    drop_columns_scheduled_for_deletion_transformer_fi: FeaturesInfo = {}
+    column_dt_prefixer_fi: FeaturesInfo = {}

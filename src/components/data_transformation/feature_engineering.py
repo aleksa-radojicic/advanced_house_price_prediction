@@ -1,9 +1,10 @@
-import copy
+from copy import deepcopy
 from dataclasses import dataclass
 
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
+from src.components.data_transformation.utils import PipelineFeaturesInfo
 from src.logger import log_message
 from src.utils import FeaturesInfo, log_feature_info_dict
 
@@ -15,9 +16,6 @@ class FeatureEngineeringConfig:
 
 class FeatureEngineeringTransformer(BaseEstimator, TransformerMixin):
     """Adds derived numerical features to the input DataFrame (numerical feature engineering)."""
-
-    previous_transformer_obj = None
-
 
     def __init__(self, verbose: int = 0) -> None:
         super().__init__()
@@ -32,8 +30,7 @@ class FeatureEngineeringTransformer(BaseEstimator, TransformerMixin):
             "Performing manipulations from feature engineering...", self.verbose
         )
         df = X.copy()
-        features_info = self.previous_transformer_obj.features_info # type: ignore
-        features_info = copy.deepcopy(features_info)
+        features_info = deepcopy(PipelineFeaturesInfo.ma_transformer_fi)
 
         df, self.features_info = self.fe_numerical(df, features_info)
 
@@ -43,6 +40,9 @@ class FeatureEngineeringTransformer(BaseEstimator, TransformerMixin):
             "Performed manipulations from feature engineering successfully.",
             self.verbose,
         )
+        if not PipelineFeaturesInfo.fe_transformer_fi:
+            PipelineFeaturesInfo.fe_transformer_fi = self.features_info # type: ignore
+
         return df
 
     def set_output(*args, **kwargs):
