@@ -8,7 +8,7 @@ from sklearn.pipeline import FunctionTransformer
 from sklearn.preprocessing import power_transform
 
 from src.config import *
-from src.logger import logging
+from src.logger import log_message, logging
 from src.utils import log_feature_info_dict
 
 
@@ -145,22 +145,23 @@ class DropColumnsScheduledForDeletionTransformer(BaseEstimator, TransformerMixin
     """Drops columns scheduled for deletion from the data frame and updates
     other columns list."""
 
-    def __init__(self, previous_transformer_obj, verbose: int = 1) -> None:
+    previous_transformer_obj = None
+
+    def __init__(self, verbose: int = 0) -> None:
         super().__init__()
-        self.previous_transformer_obj = previous_transformer_obj
         self.verbose = verbose
 
     def fit(self, X: pd.DataFrame, y=None):
         return self
 
     def transform(self, df: pd.DataFrame, y=None) -> pd.DataFrame:
-        logging.info("Dropping columns scheduled for deletion...")
+        log_message("Dropping columns scheduled for deletion...", self.verbose)
 
         # Iterate through the columns to delete
         # Note: features_info['features_to_delete'] is copied because
         # values for key 'features_to_delete' are altered in the loop and
         # otherwise it would mess the loop
-        features_info = self.previous_transformer_obj.features_info
+        features_info = self.previous_transformer_obj.features_info # type: ignore
 
         df = df.copy()
         features_info = copy.deepcopy(features_info)
@@ -178,13 +179,12 @@ class DropColumnsScheduledForDeletionTransformer(BaseEstimator, TransformerMixin
         )
         self.features_info = features_info
 
-        if self.verbose > 0:
-            log_feature_info_dict(
-                features_info, title="dropping columns scheduled for deletion"
-            )
+        
+        log_feature_info_dict(
+                features_info, "dropping columns scheduled for deletion", self.verbose
+        )
 
-        logging.info("Dropped columns scheduled for deletion successfully.")
-
+        log_message("Dropped columns scheduled for deletion successfully.", self.verbose)
         return df
 
     def set_output(*args, **kwargs):
@@ -194,16 +194,18 @@ class DropColumnsScheduledForDeletionTransformer(BaseEstimator, TransformerMixin
 class ColumnDtPrefixerTransformer(BaseEstimator, TransformerMixin):
     """Adds prefix to column names denoting its data type."""
 
-    def __init__(self, previous_transformer_obj) -> None:
+    previous_transformer_obj = None
+
+    def __init__(self, verbose: int = 0) -> None:
         super().__init__()
-        self.previous_transformer_obj = previous_transformer_obj
+        self.verbose = verbose
 
     def fit(self, X: pd.DataFrame, y=None):
         return self
 
     def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
         X = X.copy()
-        features_info = self.previous_transformer_obj.features_info
+        features_info = self.previous_transformer_obj.features_info # type: ignore
 
         X.rename(
             columns={c: f"numerical__{c}" for c in features_info["numerical"]},
@@ -221,16 +223,9 @@ class ColumnDtPrefixerTransformer(BaseEstimator, TransformerMixin):
 
         self.features_info = features_info
 
-        features_info_str = ""
-        for k, v in features_info.items():
-            features_info_str += f"{k}: {v}\n"
-        logging.info(
-            "FeaturesInfo after adding data type prefix to columns:\n"
-            + features_info_str
-        )
+        log_feature_info_dict(self.features_info, "adding data type prefix to columns", self.verbose)
 
-        logging.info("Added data type prefix to columns successfully.")
-
+        log_message("Added data type prefix to columns successfully.", self.verbose)
         return X
 
     def set_output(*args, **kwargs):
@@ -238,22 +233,23 @@ class ColumnDtPrefixerTransformer(BaseEstimator, TransformerMixin):
 
 
 class LabelTransformer(FunctionTransformer):
-    def __init__(self, **kwargs):
+    def __init__(self, verbose: int = 0, **kwargs):
         super().__init__(
             func=self.transform_func,
             inverse_func=self.inverse_transform_func,
             check_inverse=False,
             **kwargs,
         )
+        self.verbose = verbose
 
     def transform(self, X):
         result = super().transform(X)
-        logging.info("Label transformed.")
+        log_message("Label transformed.", self.verbose)
         return result
 
     def inverse_transform(self, X):
         result = super().inverse_transform(X)
-        logging.info("Label transformed back to the original.")
+        log_message("Label transformed back to the original.", self.verbose)
         return result
 
     def transform_func(self, X, y=None):

@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
 from src.components.data_transformation.utils import create_category
-from src.logger import logging
+from src.logger import log_message
 from src.utils import (FeaturesInfo, delete_column_and_update_columns_list,
                        log_feature_info_dict)
 
@@ -183,7 +183,7 @@ class UnivariateAnalysisTransformer(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
-        logging.info("Performing manipulations from univariate analysis...")
+        log_message("Performing manipulations from univariate analysis...", self.verbose)
 
         X = X.copy()
 
@@ -200,11 +200,10 @@ class UnivariateAnalysisTransformer(BaseEstimator, TransformerMixin):
         X = self.ua_process_numerical(X)
         X = self.ua_process_binary(X)
         X = self.ua_process_ordinal(X)
+        
+        log_feature_info_dict(self.features_info, "univariate analysis", self.verbose)
 
-        if self.verbose > 0:
-            log_feature_info_dict(self.features_info, title="univariate analysis")
-
-        logging.info("Performed manipulations from univariate analysis successfully.")
+        log_message("Performed manipulations from univariate analysis successfully.", self.verbose)
 
         return X
 
@@ -213,7 +212,7 @@ class UnivariateAnalysisTransformer(BaseEstimator, TransformerMixin):
 
     def downcast_df(self, X):
         # Downcast non-numerical columns
-        X = downcast_nonnumerical_dtypes(
+        X = self.downcast_nonnumerical_dtypes(
             X,
             self.features_info["binary"],
             self.features_info["ordinal"],
@@ -388,29 +387,28 @@ class UnivariateAnalysisTransformer(BaseEstimator, TransformerMixin):
             "features_to_delete": features_to_delete,
         }
 
-        logging.info("Renamed data frame initial column names successfully.")
+        log_message("Renamed data frame initial column names successfully.", self.verbose)
         return df, features_info
 
 
-def downcast_nonnumerical_dtypes(df, binary, ordinal, nominal):
-    df = df.copy()
+    def downcast_nonnumerical_dtypes(self, df, binary, ordinal, nominal):
+        df = df.copy()
 
-    for c in binary:
-        df[c] = (
-            df.loc[:, c]
-            .apply(lambda x: True if x == "Y" else False)
-            .astype("bool[pyarrow]")
-        )
+        for c in binary:
+            df[c] = (
+                df.loc[:, c]
+                .apply(lambda x: True if x == "Y" else False)
+                .astype("bool[pyarrow]")
+            )
 
-    for c in ordinal:
-        df[c] = pd.Categorical(df.loc[:, c], ordered=True)
+        for c in ordinal:
+            df[c] = pd.Categorical(df.loc[:, c], ordered=True)
 
-    for c in nominal:
-        df[c] = pd.Categorical(df.loc[:, c], ordered=False)
+        for c in nominal:
+            df[c] = pd.Categorical(df.loc[:, c], ordered=False)
 
-    logging.info("Downcast non-numerical data types successfully.")
-
-    return df
+        log_message("Downcast non-numerical data types successfully.", self.verbose)
+        return df
 
 
 def set_values_MSSubClass(df, x):

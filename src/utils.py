@@ -1,7 +1,7 @@
 import os
 import pickle
 import sys
-from typing import Dict, List
+from typing import Dict, List, Union
 
 import pandas as pd
 
@@ -78,21 +78,34 @@ def delete_column_and_update_columns_list(
             columns_list.remove(column_names)
 
 
-def log_feature_info_dict(features_info: FeaturesInfo, title: str):
-    features_info_str = ""
-    for k, v in features_info.items():
-        features_info_str += f"{k}: {v}\n"
-    logging.info(f"FeaturesInfo after {title}:\n" + features_info_str)
+def log_feature_info_dict(features_info: FeaturesInfo, title: str, verbose: int):
+    if verbose > 1:
+        features_info_str = ""
+        for k, v in features_info.items():
+            features_info_str += f"{k}: {v}\n"
+        logging.info(f"FeaturesInfo after {title}:\n" + features_info_str)
 
 
-def get_X_sets(dfs):
-    Xs = [df.drop(LABEL, axis=1) for df in dfs]
-    return Xs
+def get_X_sets(
+    dfs: Union[pd.DataFrame, List[pd.DataFrame]]
+) -> Union[pd.DataFrame, List[pd.DataFrame]]:
+    if isinstance(dfs, pd.DataFrame):
+        return dfs.drop(LABEL, axis=1)
+    elif isinstance(dfs, list) and all(isinstance(df, pd.DataFrame) for df in dfs):
+        return [df.drop(LABEL, axis=1) for df in dfs]
+    else:
+        raise ValueError("Input must be a single DataFrame or a list of DataFrames")
 
 
-def get_y_sets(dfs):
-    ys = [df[LABEL] for df in dfs]
-    return ys
+def get_y_sets(
+    dfs: Union[pd.DataFrame, List[pd.DataFrame]]
+) -> Union[pd.Series, List[pd.Series]]:
+    if isinstance(dfs, pd.DataFrame):
+        return dfs[LABEL]
+    elif isinstance(dfs, list) and all(isinstance(df, pd.DataFrame) for df in dfs):
+        return [df[LABEL] for df in dfs]
+    else:
+        raise ValueError("Input must be a single DataFrame or a list of DataFrames")
 
 
 def pickle_object(file_path, obj):

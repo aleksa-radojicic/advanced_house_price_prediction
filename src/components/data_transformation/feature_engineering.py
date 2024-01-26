@@ -1,11 +1,10 @@
 import copy
 from dataclasses import dataclass
-from typing import Tuple
 
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from src.logger import logging
+from src.logger import log_message
 from src.utils import FeaturesInfo, log_feature_info_dict
 
 
@@ -17,27 +16,33 @@ class FeatureEngineeringConfig:
 class FeatureEngineeringTransformer(BaseEstimator, TransformerMixin):
     """Adds derived numerical features to the input DataFrame (numerical feature engineering)."""
 
-    def __init__(self, previous_transformer_obj, verbose: int = 1) -> None:
+    previous_transformer_obj = None
+
+
+    def __init__(self, verbose: int = 0) -> None:
         super().__init__()
         self.config = FeatureEngineeringConfig()
-        self.previous_transformer_obj = previous_transformer_obj
         self.verbose = verbose
 
     def fit(self, X: pd.DataFrame, y=None):
         return self
 
     def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
-        logging.info("Performing manipulations from feature engineering...")
+        log_message(
+            "Performing manipulations from feature engineering...", self.verbose
+        )
         df = X.copy()
-        features_info = self.previous_transformer_obj.features_info
+        features_info = self.previous_transformer_obj.features_info # type: ignore
         features_info = copy.deepcopy(features_info)
 
         df, self.features_info = self.fe_numerical(df, features_info)
 
-        if self.verbose > 0:
-            log_feature_info_dict(self.features_info, title="feature engineering")
+        log_feature_info_dict(self.features_info, "feature engineering", self.verbose)
 
-        logging.info("Performed manipulations from feature engineering successfully.")
+        log_message(
+            "Performed manipulations from feature engineering successfully.",
+            self.verbose,
+        )
         return df
 
     def set_output(*args, **kwargs):

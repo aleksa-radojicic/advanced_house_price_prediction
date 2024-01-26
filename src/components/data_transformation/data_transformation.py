@@ -2,8 +2,8 @@ import os
 import sys
 from dataclasses import dataclass
 from typing import List, Tuple
-import numpy as np
 
+import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer, make_column_selector
 from sklearn.pipeline import Pipeline
@@ -18,12 +18,11 @@ from src.components.data_transformation.post_feature_engineering_analysis import
     PostFEAnalysisTransformer
 from src.components.data_transformation.univariate_analysis import \
     UnivariateAnalysisTransformer
-from src.components.data_transformation.utils import \
-    ColumnDtPrefixerTransformer, DropColumnsScheduledForDeletionTransformer, LabelTransformer
+from src.components.data_transformation.utils import (
+    ColumnDtPrefixerTransformer, DropColumnsScheduledForDeletionTransformer,
+    LabelTransformer)
 from src.config import LABEL
-from src.exception import CustomException
-from src.logger import LOG_ENDING, logging
-from src.utils import FeaturesInfo
+from src.utils import FeaturesInfo, get_X_sets, get_y_sets
 
 
 @dataclass
@@ -32,23 +31,38 @@ class DataTransformationConfig:
 
 
 class DataTransformation:
-    def __init__(self):
+    def __init__(self, verbose: int = 0):
+        self.verbose = verbose
         self.data_transformation_config = DataTransformationConfig()
         self.idx_to_remove: List[int] = []
 
-    def create_data_transformer_object(self):
+    def create_data_transformation_pipeline(self):
         features_info: FeaturesInfo = {}
 
-        ua_transformer = UnivariateAnalysisTransformer(features_info)
-        ma_transformer = MultivariateAnalysisTransformer(ua_transformer)
-        fe_transformer = FeatureEngineeringTransformer(ma_transformer)
-        pfea_transformer = PostFEAnalysisTransformer(fe_transformer)
-        drop_columns_scheduled_for_deletion_transformer = DropColumnsScheduledForDeletionTransformer(pfea_transformer)
-        column_dt_prefixer = ColumnDtPrefixerTransformer(drop_columns_scheduled_for_deletion_transformer)
+        ua_transformer = UnivariateAnalysisTransformer(features_info, self.verbose)
+        
+        ma_transformer = MultivariateAnalysisTransformer(self.verbose)
+        ma_transformer.previous_transformer_obj = ua_transformer # type: ignore
+        
+        fe_transformer = FeatureEngineeringTransformer(self.verbose)
+        fe_transformer.previous_transformer_obj = ma_transformer # type: ignore
+
+        pfea_transformer = PostFEAnalysisTransformer(self.verbose)
+        pfea_transformer.previous_transformer_obj = fe_transformer # type: ignore
+
+        drop_columns_scheduled_for_deletion_transformer = (
+            DropColumnsScheduledForDeletionTransformer(self.verbose)
+        )
+        drop_columns_scheduled_for_deletion_transformer.previous_transformer_obj = pfea_transformer # type: ignore
+
+        
+        column_dt_prefixer = ColumnDtPrefixerTransformer(self.verbose
+        )
+        column_dt_prefixer.previous_transformer_obj = drop_columns_scheduled_for_deletion_transformer # type: ignore
+
         column_transformer = create_column_transformer()
 
-        transformer_pipeline = Pipeline(
-            steps=[
+        data_transformation_pipeline = Pipeline([
                 ("univariate_analysis", ua_transformer),
                 ("multivariate_analysis", ma_transformer),
                 ("feature_engineering", fe_transformer),
@@ -58,39 +72,7 @@ class DataTransformation:
                 ("column_transformer", column_transformer)
             ]
         ).set_output(transform="pandas")
-        return transformer_pipeline
-
-    def start(self, df_train: pd.DataFrame, df_test: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        logging.info(msg="Data transformation method or component started")
-
-        try:
-            preprocessing_obj = self.create_data_transformer_object()
-
-            logging.info(
-                f"Applying preprocessing object on training dataframe and testing dataframe."
-            )
-
-            df_train_preprocessed = preprocessing_obj.fit_transform(df_train)  # type: ignore
-            df_test_preprocessed = preprocessing_obj.transform(df_test)  # type: ignore
-
-            # The deletion of rows should be handled differently
-            delete_rows(df_train_preprocessed)
-            logging.info("Appropriate rows deleted.")
-
-            # logging.info(f"Saved preprocessing objects.")
-
-            # save_object(
-            #     file_path=self.data_transformation_config.preprocessor_obj_file_path,
-            #     obj=preprocessing_obj,
-            # )
-        except Exception as e:
-            raise CustomException(e, sys)  # type: ignore
-
-        logging.info(
-            msg="Data transformation method or component finished" + LOG_ENDING
-        )
-
-        return df_train_preprocessed, df_test_preprocessed
+        return data_transformation_pipeline
 
 def create_column_transformer():
     ct = ColumnTransformer(
@@ -101,8 +83,7 @@ def create_column_transformer():
             ("binary", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), make_column_selector(pattern="binary__")),
             # ("ordinal", OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1), features_info["ordinal"]),
             ("ordinal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), make_column_selector(pattern="ordinal__")),
-            ("nominal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1, dtype=np.int16), make_column_selector(pattern="nominal__")),
-            ("label", LabelTransformer(), [LABEL])
+            ("nominal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1, dtype=np.int16), make_column_selector(pattern="nominal__"))
             # ("nominal", OneHotEncoder(handle_unknown='ignore', dtype=np.int8, sparse_output=False), features_info["nominal"])
         ],
         remainder="drop",
@@ -110,14 +91,22 @@ def create_column_transformer():
     ).set_output(transform="pandas")
     return ct
 
-def delete_rows(df: pd.DataFrame):
-    df.drop([598], inplace=True)
-
 if __name__ == "__main__":
     data_ingestion = DataIngestion()
     df, df_train, df_test, df_test_submission = data_ingestion.start()
 
     data_transformation = DataTransformation()
-    df_train_preprocessed, df_test_preprocessed = data_transformation.start(
-        df_train, df_test
-    )
+    pipeline = Pipeline([("data_transformation", data_transformation.create_data_transformation_pipeline())])
+    
+    label_transformer = LabelTransformer()
+
+    X_train, X_test = get_X_sets([df_train, df_test])
+    y_train, y_test = get_y_sets([df_train, df_test])
+
+    X_train_transformed = pipeline.fit_transform(X_train) # type: ignore
+    print(X_train_transformed.info()) # type: ignore
+    X_test_transformed = pipeline.transform(X_test) # type: ignore
+    print(X_test_transformed.info()) # type: ignore
+
+    y_train_transformed = label_transformer.fit_transform(y_train) # type: ignore
+    y_test_transformed = label_transformer.fit_transform(y_test) # type: ignore

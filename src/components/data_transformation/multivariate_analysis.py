@@ -4,8 +4,8 @@ from dataclasses import dataclass
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from src.logger import logging
-from src.utils import FeaturesInfo, log_feature_info_dict
+from src.logger import log_message
+from src.utils import log_feature_info_dict
 
 
 @dataclass
@@ -15,33 +15,35 @@ class MultivariateAnalysisConfig:
 
 class MultivariateAnalysisTransformer(BaseEstimator, TransformerMixin):
     """Manipulates data set as it was done in multivariate analysis."""
+    
+    previous_transformer_obj = None
 
-    def __init__(self, previous_transformer_obj, verbose: int = 0) -> None:
+    def __init__(self, verbose: int = 0) -> None:
         super().__init__()
         self.config = MultivariateAnalysisConfig()
-        self.previous_transformer_obj = previous_transformer_obj
         self.verbose = verbose
 
     def fit(self, X: pd.DataFrame, y=None):
         return self
 
     def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
-        logging.info("Performing manipulations from multivariate analysis...")
+        log_message(
+            "Performing manipulations from multivariate analysis...", self.verbose
+        )
 
-        features_info = self.previous_transformer_obj.features_info
+        features_info = self.previous_transformer_obj.features_info # type: ignore
         self.features_info = copy.deepcopy(features_info)
 
         X = X.copy()
         X = self.ma_process_missing_values(X)
         self.features_info["features_to_delete"].append("GarageCond")
 
-        if self.verbose > 0:
-            log_feature_info_dict(self.features_info, title="multivariate analysis")
+        log_feature_info_dict(self.features_info, "multivariate analysis", self.verbose)
 
-        logging.info(
-            "Performed manipulations from univariate multivariate successfully."
+        log_message(
+            "Performed manipulations from univariate multivariate successfully.",
+            self.verbose,
         )
-
         return X
 
     def set_output(*args, **kwargs):

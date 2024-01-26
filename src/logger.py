@@ -17,3 +17,7 @@ logging.basicConfig(
     format="[ %(asctime)s ] %(lineno)d %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
+
+def log_message(message, verbose=1):
+    if verbose > 0:
+        logging.info(message)

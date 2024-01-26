@@ -11,8 +11,8 @@ from sklearn.svm import SVR
 from sklearn.tree import DecisionTreeRegressor
 
 from src.components.data_ingestion import DataIngestion
-from src.components.data_transformation.data_transformation import \
-    DataTransformation
+from src.components.data_transformation.data_transformation import DataTransformation
+from src.components.data_transformation.utils import LabelTransformer
 from src.config import *
 from src.logger import LOG_ENDING, logging
 from src.utils import get_X_sets, get_y_sets
@@ -65,13 +65,20 @@ if __name__ == "__main__":
     df, df_train, df_test, df_test_submission = data_ingestion.start()
 
     data_transformation = DataTransformation()
-    df_train_preprocessed, df_test_preprocessed = data_transformation.start(
-        df_train, df_test
+    pipeline = Pipeline(
+        [
+            (
+                "data_transformation",
+                data_transformation.create_data_transformation_pipeline(),
+            )
+        ]
     )
+    label_transformer = LabelTransformer()
 
-    X_train = get_X_sets(df_train_preprocessed)
-    y_train = get_y_sets(df_train_preprocessed)
+    X_train = get_X_sets(df_train)
+    y_train = get_y_sets(df_train)
+    y_train_transformed = label_transformer.fit_transform(y_train)  # type: ignore
 
     model_trainer = ModelTrainer("ridge")
-    train_pipeline = model_trainer.add_predictor_to_pipeline(Pipeline([]))
+    train_pipeline = model_trainer.add_predictor_to_pipeline(pipeline)
     model_trainer.start(train_pipeline, X_train, y_train)

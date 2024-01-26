@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
-from src.logger import logging
+from src.logger import log_message
 from src.utils import FeaturesInfo, log_feature_info_dict
 
 
@@ -15,23 +15,25 @@ class PostFEAnalysisConfig:
 class PostFEAnalysisTransformer(BaseEstimator, TransformerMixin):
     """Manipulates data set as it was done in univariate analysis."""
 
-    def __init__(self, previous_transformer_obj, verbose: int = 0) -> None:
+    previous_transformer_obj = None
+
+    def __init__(self, verbose: int = 0) -> None:
         super().__init__()
         self.config = PostFEAnalysisConfig()
-        self.previous_transformer_obj = previous_transformer_obj
         self.verbose = verbose
 
     def fit(self, X: pd.DataFrame, y=None):
         return self
 
     def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
-        logging.info(
-            "Performing manipulations from post feature engineering analysis..."
+        log_message(
+            "Performing manipulations from post feature engineering analysis...",
+            self.verbose,
         )
 
         X = X.copy()
 
-        features_info: FeaturesInfo = self.previous_transformer_obj.features_info
+        features_info: FeaturesInfo = self.previous_transformer_obj.features_info # type: ignore
 
         # -------TEMPORARY-------------
         # df.loc[:, ["IndoorM2", "LotM2"]] = hp.NumericColumnsTransformer(
@@ -50,15 +52,14 @@ class PostFEAnalysisTransformer(BaseEstimator, TransformerMixin):
         features_info["features_to_delete"].extend(derived_numerical_for_deletion)
         self.features_info = features_info
 
-        if self.verbose > 0:
-            log_feature_info_dict(
-                self.features_info, title="post feature engineering analysis"
-            )
-
-        logging.info(
-            "Performed manipulations from post feature engineering analysis successfully."
+        log_feature_info_dict(
+            self.features_info, "post feature engineering analysis", self.verbose
         )
 
+        log_message(
+            "Performed manipulations from post feature engineering analysis successfully.",
+            self.verbose,
+        )
         return X
 
     def set_output(*args, **kwargs):

@@ -20,6 +20,7 @@ from sklearn.tree import DecisionTreeRegressor
 from src.components.data_ingestion import DataIngestion
 from src.components.data_transformation.data_transformation import \
     DataTransformation
+from src.components.data_transformation.utils import LabelTransformer
 from src.config import *
 # reload(src.config);
 from src.logger import LOG_ENDING, logging
@@ -64,24 +65,25 @@ class Modelling:
     def __init__(self):
         self.modelling_config = ModellingConfig()
 
-    def start(self, df_train, df_test):
+    def start(self, pipeline, X_train, y_train, X_test, y_test):
         logging.info(msg="Modelling method or component started")
-
-        X_train, X_test = get_X_sets([df_train, df_test])
-        y_train, y_test = get_y_sets([df_train, df_test])
 
         eval_metrics: Dict[str, float] = {}
         models: Dict[str, RegressorMixin] = self.modelling_config.models
 
         for model_name, predictor_obj in models.items():
-            pipeline = self.append_predictor_to_pipeline(Pipeline([]), predictor_obj)
+            pipeline_with_predictor = self.append_predictor_to_pipeline(
+                pipeline, predictor_obj
+            )
 
             logging.info(f"Training {model_name} started.")
-            self.train_model(pipeline, X_train, y_train)
+            self.train_model(pipeline_with_predictor, X_train, y_train)
             logging.info(f"Training {model_name} finished" + LOG_ENDING)
 
             logging.info(f"Evaluation of {model_name} started.")
-            main_eval_metric = self.evaluate_model(pipeline, X_test, y_test)
+            main_eval_metric = self.evaluate_model(
+                pipeline_with_predictor, X_test, y_test
+            )
             eval_metrics[model_name] = main_eval_metric
             logging.info(
                 f"Evaluation of {model_name} finished.\nMain evaluation metric: {main_eval_metric}"
@@ -158,9 +160,24 @@ if __name__ == "__main__":
     df, df_train, df_test, df_test_submission = data_ingestion.start()
 
     data_transformation = DataTransformation()
-    df_train_preprocessed, df_test_preprocessed = data_transformation.start(
-        df_train, df_test
+    pipeline = Pipeline(
+        [
+            (
+                "data_transformation",
+                data_transformation.create_data_transformation_pipeline(),
+            )
+        ]
     )
 
+    label_transformer = LabelTransformer()
+
+    X_train, X_test = get_X_sets([df_train, df_test])
+    y_train, y_test = get_y_sets([df_train, df_test])
+
+    y_train_transformed = label_transformer.fit_transform(y_train) # type: ignore
+    y_test_transformed = label_transformer.fit_transform(y_test) # type: ignore
+
     modelling = Modelling()
-    modelling.start(df_train_preprocessed, df_test_preprocessed)
+    modelling.start(pipeline, X_train, y_train_transformed, X_test, y_test_transformed)
+
+    logging.info(msg="Data transformation method or component started")
